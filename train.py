@@ -1,7 +1,5 @@
 import argparse
-import math
 from datetime import datetime
-import h5py
 import numpy as np
 import tensorflow as tf
 import socket
@@ -64,7 +62,7 @@ HOSTNAME = socket.gethostname()
 
 NUM_CLASSES = 40
 
-# Shapenet official train/test split
+
 if FLAGS.normal:
     assert (NUM_POINT <= 10000)
     DATA_PATH = os.path.join(ROOT_DIR, 'data/modelnet40_normal_resampled')
@@ -90,10 +88,10 @@ def log_string(out_str):
 
 def get_learning_rate(batch):
     learning_rate = tf.train.exponential_decay(
-        BASE_LEARNING_RATE,  # Base learning rate.
-        batch * BATCH_SIZE,  # Current index into the dataset.
-        DECAY_STEP,  # Decay step.
-        DECAY_RATE,  # Decay rate.
+        BASE_LEARNING_RATE,
+        batch * BATCH_SIZE,
+        DECAY_STEP,
+        DECAY_RATE,
         staircase=True)
     learning_rate = tf.maximum(learning_rate, 0.00001)  # CLIP THE LEARNING RATE!
     return learning_rate
@@ -116,15 +114,11 @@ def train():
             pointclouds_pl, labels_pl = MODEL.placeholder_inputs(BATCH_SIZE, NUM_POINT)
             is_training_pl = tf.placeholder(tf.bool, shape=())
 
-            # Note the global_step=batch parameter to minimize.
-            # That tells the optimizer to helpfully increment the 'batch' parameter
-            # for you every time it trains.
             batch = tf.get_variable('batch', [],
                                     initializer=tf.constant_initializer(0), trainable=False)
             bn_decay = get_bn_decay(batch)
             tf.summary.scalar('bn_decay', bn_decay)
 
-            # Get model and loss
             pred, end_points = MODEL.get_model(pointclouds_pl, is_training_pl, bn_decay=bn_decay)
             MODEL.get_loss(pred, labels_pl, end_points)
             losses = tf.get_collection('losses')
@@ -137,9 +131,6 @@ def train():
             accuracy = tf.reduce_sum(tf.cast(correct, tf.float32)) / float(BATCH_SIZE)
             tf.summary.scalar('accuracy', accuracy)
 
-            print()
-            "--- Get training operator"
-            # Get training operator
             learning_rate = get_learning_rate(batch)
             tf.summary.scalar('learning_rate', learning_rate)
             if OPTIMIZER == 'momentum':
@@ -148,22 +139,18 @@ def train():
                 optimizer = tf.train.AdamOptimizer(learning_rate)
             train_op = optimizer.minimize(total_loss, global_step=batch)
 
-            # Add ops to save and restore all the variables.
             saver = tf.train.Saver()
 
-        # Create a session
         config = tf.ConfigProto()
         config.gpu_options.allow_growth = True
         config.allow_soft_placement = True
         config.log_device_placement = False
         sess = tf.Session(config=config)
 
-        # Add summary writers
         merged = tf.summary.merge_all()
         train_writer = tf.summary.FileWriter(os.path.join(LOG_DIR, 'train'), sess.graph)
         test_writer = tf.summary.FileWriter(os.path.join(LOG_DIR, 'test'), sess.graph)
 
-        # Init variables
         init = tf.global_variables_initializer()
         sess.run(init)
 
@@ -192,12 +179,10 @@ def train():
 
 
 def train_one_epoch(sess, ops, train_writer):
-    """ ops: dict mapping from string to tf ops """
     is_training = True
 
     log_string(str(datetime.now()))
 
-    # Make sure batch data is of same size
     cur_batch_data = np.zeros((BATCH_SIZE, NUM_POINT, TRAIN_DATASET.num_channel()))
     cur_batch_label = np.zeros((BATCH_SIZE), dtype=np.int32)
 
@@ -207,7 +192,7 @@ def train_one_epoch(sess, ops, train_writer):
     batch_idx = 0
     while TRAIN_DATASET.has_next_batch():
         batch_data, batch_label = TRAIN_DATASET.next_batch(augment=True)
-        # batch_data = provider.random_point_dropout(batch_data)
+
         bsize = batch_data.shape[0]
         cur_batch_data[0:bsize, ...] = batch_data
         cur_batch_label[0:bsize] = batch_label
@@ -237,11 +222,10 @@ def train_one_epoch(sess, ops, train_writer):
 
 
 def eval_one_epoch(sess, ops, test_writer):
-    """ ops: dict mapping from string to tf ops """
+
     global EPOCH_CNT
     is_training = False
 
-    # Make sure batch data is of same size
     cur_batch_data = np.zeros((BATCH_SIZE, NUM_POINT, TEST_DATASET.num_channel()))
     cur_batch_label = np.zeros((BATCH_SIZE), dtype=np.int32)
 
@@ -249,7 +233,7 @@ def eval_one_epoch(sess, ops, test_writer):
     total_seen = 0
     loss_sum = 0
     batch_idx = 0
-    shape_ious = []
+
     total_seen_class = [0 for _ in range(NUM_CLASSES)]
     total_correct_class = [0 for _ in range(NUM_CLASSES)]
 
